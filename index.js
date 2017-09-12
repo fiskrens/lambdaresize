@@ -34,7 +34,7 @@ exports.handler = function(event, context, callback) {
             body: '',
           })
         } else {
-          obj.resize(width, height).toFormat('jpeg');
+          obj.rotate().resize(width, height).toFormat('jpeg');
 
           if(bolCrop) {
             obj.crop();
