@@ -17,24 +17,38 @@ exports.handler = function(event, context, callback) {
   const arrDimensions = arrMatches.pop().split('x');
   const strFolder = arrMatches.join('/');
 
-  const bolCrop = (arrDimensions[1].indexOf('c') !== -1);
-  const bolUpscale = (arrDimensions[1].indexOf('u') !== -1);
-
-  const width = parseInt(arrDimensions[0], 10);
-  const height = parseInt(arrDimensions[1].replace(/[^0-9]/, ''), 10);
+  const bolCrop = ((arrDimensions[1]+'').indexOf('c') !== -1);
+  const bolUpscale = ((arrDimensions[1]+'').indexOf('u') !== -1);
+  const intWidth = parseInt(arrDimensions[0], 10) || 0;
+  const intHeight = parseInt((arrDimensions[1]+'').replace(/[^0-9]/, ''), 10) || 0;
 
   S3.getObject({Bucket: BUCKET, Key: (strFolder+'/Original/'+strFilename)}).promise()
     .then(data => {
       var obj = Sharp(data.Body);
       return obj.metadata().then(metadata => {
-        if((metadata.width < width && metadata.height < height) && !bolCrop && !bolUpscale) {
-          callback(null, {
-            statusCode: '301',
-            headers: {'location': URL + '/' + strFolder+'/Original/'+strFilename},
-            body: '',
-          })
+        if(arrDimensions[0]=='Full' || ((metadata.width < intWidth && metadata.height < intHeight) && !bolCrop && !bolUpscale)) {
+          //Only need to rotate image, and save in the "Full" folder.
+          obj.rotate().toFormat('jpeg');
+          obj.toBuffer()
+            .then(buffer => {
+              return S3.putObject({
+                Body: buffer,
+                Bucket: BUCKET,
+                CacheControl: 'max-age=31536000',
+                ContentType: 'image/jpeg',
+                Key: strFolder+'/Full/'+strFilename,
+              }).promise()
+            })
+            .then(() => callback(null, {
+              statusCode: '301',
+              headers: {'location': URL + '/' + strFolder+'/Full/'+strFilename},
+              body: '',
+            }))
+            .catch(error => {
+              console.log(error);
+            });
         } else {
-          obj.rotate().resize(width, height).toFormat('jpeg');
+          obj.rotate().resize(intWidth, intHeight).toFormat('jpeg');
 
           if(bolCrop) {
             obj.crop();
@@ -66,10 +80,11 @@ exports.handler = function(event, context, callback) {
       });
     })
     .catch(error => {
+      console.log(error);
       return callback(null, {
         statusCode: '404',
         headers: {'Content-type':'text/plain'},
-        body: '404 Not found',
+        body: '404 Not found' + strFolder+'/Original/'+strFilename+ '  ' + parseInt(arrDimensions[0]) + ' ... ' + parseInt(arrDimensions[1]) + ' - ' + intHeight + '::' + intWidth,
       })
     })
     
