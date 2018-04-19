@@ -19,6 +19,8 @@ exports.handler = function(event, context, callback) {
 
   const bolCrop = ((arrDimensions[1]+'').indexOf('c') !== -1);
   const bolUpscale = ((arrDimensions[1]+'').indexOf('u') !== -1);
+  const bolOverlay = ((arrDimensions[1]+'').indexOf('o') !== -1);
+
   const intWidth = parseInt(arrDimensions[0], 10) || 0;
   const intHeight = parseInt((arrDimensions[1]+'').replace(/[^0-9]/, ''), 10) || 0;
 
@@ -48,8 +50,15 @@ exports.handler = function(event, context, callback) {
               console.log(error);
             });
         } else {
-          obj.rotate().resize(intWidth, intHeight).toFormat('jpeg');
-
+          //Add a max upscale limit
+          var intResizeWidth = intWidth;
+          var intResizeHeight = intHeight;
+          if(bolUpscale) {
+            if(intWidth>4000) { intResizeWidth = 4000;}
+            if(intHeight>4000) { intResizeHeight = 4000;}
+          }
+          
+          obj.rotate().resize(intResizeWidth, intResizeHeight).toFormat('jpeg');
           if(bolCrop) {
             obj.crop();
           } else {
@@ -57,6 +66,9 @@ exports.handler = function(event, context, callback) {
             if(!bolUpscale) {
               obj.withoutEnlargement();
             }  
+          }
+          if(bolOverlay) {
+            obj.overlayWith('overlay.png', { gravity: Sharp.gravity.southeast});
           }
           obj.toBuffer()
             .then(buffer => {
@@ -84,7 +96,7 @@ exports.handler = function(event, context, callback) {
       return callback(null, {
         statusCode: '404',
         headers: {'Content-type':'text/plain'},
-        body: '404 Not found' + strFolder+'/Original/'+strFilename+ '  ' + parseInt(arrDimensions[0]) + ' ... ' + parseInt(arrDimensions[1]) + ' - ' + intHeight + '::' + intWidth,
+        body: '404 Not found',
       })
     })
     
